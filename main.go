@@ -32,7 +32,7 @@ import (
 
 const (
 	host = "0.0.0.0"
-	port = "23234"
+	port = "2227"
 )
 
 type Message struct {
