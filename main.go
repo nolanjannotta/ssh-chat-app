@@ -47,7 +47,7 @@ type app struct {
 }
 
 type NewMessageMsg struct {
-	text string
+	// text string
 }
 
 func (a *app) ProgramHandler(s ssh.Session) *tea.Program {
@@ -66,7 +66,7 @@ func (a *app) ProgramHandler(s ssh.Session) *tea.Program {
 	renderer := bubbletea.MakeRenderer(s)
 
 	messageInput := textinput.New()
-	messageInput.Placeholder = "message"
+	messageInput.Placeholder = "press spacebar to type"
 	// messageInput.Focus()
 	messageInput.Width = pty.Window.Width
 
@@ -87,7 +87,7 @@ func (a *app) ProgramHandler(s ssh.Session) *tea.Program {
 	message := Message{
 		username: "",
 		time:     "",
-		text:     fmt.Sprintf("%s has entered the chat.", model.username),
+		text:     lipgloss.NewStyle().Foreground(lipgloss.Color("#3C3C3C")).Render(fmt.Sprintf("%s has entered the chat.", model.username)),
 	}
 
 	a.messagesDeque.PushBack(message)
@@ -125,11 +125,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
+			quit := Message{
+				username: "",
+				time:     "",
+				text:     lipgloss.NewStyle().Foreground(lipgloss.Color("#3C3C3C")).Render(fmt.Sprintf("%s has left the chat.", m.username)),
+			}
+
+			m.app.messagesDeque.PushBack(quit)
 			return m, tea.Quit
-		case "enter":
+		case " ":
 			if !m.messageInput.Focused() {
 				m.messageInput.Focus()
-			} else {
+			}
+		case "enter":
+			if m.messageInput.Focused() {
 				if m.app.messagesDeque.Len() >= 20 {
 					m.app.messagesDeque.PopFront()
 				}
@@ -142,8 +151,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.app.messagesDeque.PushBack(message)
 
 				m.updateClients(NewMessageMsg{})
+
 			}
+
 		}
+
 	case NewMessageMsg:
 
 	}
@@ -159,7 +171,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.messageInput, cmd1 = m.messageInput.Update(msg)
 	m.viewport, cmd2 = m.viewport.Update(msg)
 
-	fmt.Println(cmd1, cmd2)
+	// fmt.Println(cmd1, cmd2)
 
 	return m, tea.Batch(cmd1, cmd2)
 }
@@ -171,7 +183,7 @@ func (m model) View() string {
 	// fmt.Println(m.app.messagesDeque.Len())
 	for i := range m.app.messagesDeque.Len() {
 		message := m.app.messagesDeque.At(i)
-		messages += "\n" + message.username + message.time + message.text
+		messages += "\n" + message.username + message.time + message.text + "\n"
 
 	}
 	m.viewport.SetContent(messages)
