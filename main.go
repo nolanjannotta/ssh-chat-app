@@ -43,6 +43,7 @@ type app struct {
 	idToClient map[uuid.UUID]*tea.Program
 	// messages      string
 	messagesDeque *deque.Deque[Message]
+	// clearPassword string
 	// messages   [20]Message
 }
 
@@ -60,6 +61,10 @@ func (a *app) ProgramHandler(s ssh.Session) *tea.Program {
 	// id := fmt.Sprintf("%x", hash[0:5])
 	// fmt.Println(id)
 	// fmt.Printf("SHA-256 hash: %x\n", hash)
+
+	// password := []byte("clear_all")
+	// passwordHash := sha256.Sum256(password)
+	// fmt.Println(fmt.Sprintf("%x", passwordHash))
 
 	pty, _, _ := s.Pty()
 
@@ -87,7 +92,7 @@ func (a *app) ProgramHandler(s ssh.Session) *tea.Program {
 	message := Message{
 		username: "",
 		time:     "",
-		text:     lipgloss.NewStyle().Foreground(lipgloss.Color("#3C3C3C")).Render(fmt.Sprintf("%s has entered the chat.", model.username)),
+		text:     model.renderer.NewStyle().Foreground(lipgloss.Color("#3C3C3C")).Render(fmt.Sprintf("%s has entered the chat.", model.username)),
 	}
 
 	a.messagesDeque.PushBack(message)
@@ -110,6 +115,7 @@ type model struct {
 	app          *app
 	username     string
 	viewport     viewport.Model
+	renderer     *lipgloss.Renderer
 }
 
 func (m model) Init() tea.Cmd {
@@ -118,6 +124,11 @@ func (m model) Init() tea.Cmd {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// var cmd tea.Cmd
+	var cmd1, cmd2 tea.Cmd
+	var cmds []tea.Cmd
+	m.messageInput, cmd1 = m.messageInput.Update(msg)
+	m.viewport, cmd2 = m.viewport.Update(msg)
+	cmds = append(cmds, cmd1, cmd2)
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.height = msg.Height
@@ -128,24 +139,43 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			quit := Message{
 				username: "",
 				time:     "",
-				text:     lipgloss.NewStyle().Foreground(lipgloss.Color("#3C3C3C")).Render(fmt.Sprintf("%s has left the chat.", m.username)),
+				text:     m.renderer.NewStyle().Foreground(lipgloss.Color("#3C3C3C")).Render(fmt.Sprintf("%s has left the chat.", m.username)),
 			}
 
 			m.app.messagesDeque.PushBack(quit)
 			return m, tea.Quit
 		case " ":
 			if !m.messageInput.Focused() {
-				m.messageInput.Focus()
+				focusCmd := m.messageInput.Focus()
+				cmds = append(cmds, focusCmd)
+				m.messageInput.Placeholder = "press enter to send"
+				// m.messageInput.
+				// m.messageInput.SetValue("")
 			}
+
+		// case "420":
+		// 	m.app.messagesDeque.Clear()
 		case "enter":
 			if m.messageInput.Focused() {
 				if m.app.messagesDeque.Len() >= 20 {
 					m.app.messagesDeque.PopFront()
 				}
-				message := Message{
-					username: m.username,
-					time:     "@" + time.Now().Format("15:04:05"),
-					text:     "\n  ↳" + m.messageInput.Value(),
+
+				// fmt.Println(m.messageInput.Value())
+				var message Message
+				if m.messageInput.Value() == "clear_all69" {
+					m.app.messagesDeque.Clear()
+					message = Message{
+						username: "",
+						time:     "",
+						text:     m.renderer.NewStyle().Foreground(lipgloss.Color("#3C3C3C")).Render("chat cleared"),
+					}
+				} else {
+					message = Message{
+						username: m.username,
+						time:     "@" + time.Now().Format("15:04:05"),
+						text:     "\n  ↳" + m.messageInput.Value(),
+					}
 				}
 
 				m.app.messagesDeque.PushBack(message)
@@ -166,14 +196,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		messages += "\n" + message.username + message.time + message.text
 
 	}
-	var cmd1, cmd2 tea.Cmd
 
-	m.messageInput, cmd1 = m.messageInput.Update(msg)
-	m.viewport, cmd2 = m.viewport.Update(msg)
+	// m.messageInput, cmd1 = m.messageInput.Update(msg)
 
 	// fmt.Println(cmd1, cmd2)
 
-	return m, tea.Batch(cmd1, cmd2)
+	return m, tea.Batch(cmds...)
 }
 
 func (m model) View() string {
@@ -209,9 +237,10 @@ func main() {
 	a := new(app)
 	a.idToClient = make(map[uuid.UUID]*tea.Program)
 	a.messagesDeque = new(deque.Deque[Message])
+	// a.clearPassword = "90239a30e767caddf585ece44f0d572d659631b9fce0de13c713f101f6103863"
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
-		wish.WithHostKeyPath(fmt.Sprint(home, "/.ssh/chat-app")),
+		wish.WithHostKeyPath(fmt.Sprint(home, "/.ssh/chat-app/chat-app")),
 		// wish.WithPublicKeyAuth(publicKeyAuthHandler),
 		wish.WithMiddleware(
 			bubbletea.MiddlewareWithProgramHandler(a.ProgramHandler, termenv.ANSI256),
