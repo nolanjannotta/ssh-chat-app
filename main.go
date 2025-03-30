@@ -240,7 +240,7 @@ func main() {
 	// a.clearPassword = "90239a30e767caddf585ece44f0d572d659631b9fce0de13c713f101f6103863"
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
-		wish.WithHostKeyPath(fmt.Sprint(home, "/.ssh/chat-app/chat-app")),
+		wish.WithHostKeyPath(fmt.Sprint(home, "/.ssh/chat-app/")),
 		// wish.WithPublicKeyAuth(publicKeyAuthHandler),
 		wish.WithMiddleware(
 			bubbletea.MiddlewareWithProgramHandler(a.ProgramHandler, termenv.ANSI256),
