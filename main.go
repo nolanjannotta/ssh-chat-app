@@ -201,12 +201,17 @@ func (m model) View() string {
 }
 
 func main() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		panic(err)
+	}
+
 	a := new(app)
 	a.idToClient = make(map[uuid.UUID]*tea.Program)
 	a.messagesDeque = new(deque.Deque[Message])
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
-		wish.WithHostKeyPath(".ssh/id_ed25519"),
+		wish.WithHostKeyPath(fmt.Sprint(home, "/.ssh/chat-app")),
 		// wish.WithPublicKeyAuth(publicKeyAuthHandler),
 		wish.WithMiddleware(
 			bubbletea.MiddlewareWithProgramHandler(a.ProgramHandler, termenv.ANSI256),
