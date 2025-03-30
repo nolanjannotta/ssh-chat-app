@@ -69,11 +69,16 @@ func (a *app) ProgramHandler(s ssh.Session) *tea.Program {
 	pty, _, _ := s.Pty()
 
 	renderer := bubbletea.MakeRenderer(s)
-
+	fmt.Println(renderer.ColorProfile().Name())
 	messageInput := textinput.New()
 	messageInput.Placeholder = "press spacebar to type"
-	// messageInput.Focus()
 	messageInput.Width = pty.Window.Width
+	// messageInput.TextStyle.Renderer(renderer)
+	// messageInput.Cursor.Style.Renderer(renderer)
+	messageInput.PlaceholderStyle = renderer.NewStyle().Foreground(lipgloss.Color("#3C3C3C"))
+	// messageInput.Cursor.TextStyle.Renderer(renderer)
+	messageInput.Cursor.SetChar("D")
+	messageInput.Cursor.Style.Renderer(renderer).Foreground(lipgloss.Color("0xfffff"))
 
 	model := model{
 		term:         pty.Term,
@@ -83,6 +88,7 @@ func (a *app) ProgramHandler(s ssh.Session) *tea.Program {
 		messageInput: messageInput,
 		id:           uuid.New(),
 		username:     s.User() + fmt.Sprintf("_%x", hash[0:2]),
+		renderer:     renderer,
 	}
 
 	model.viewport = viewport.New(model.width, model.height-1)
@@ -92,7 +98,7 @@ func (a *app) ProgramHandler(s ssh.Session) *tea.Program {
 	message := Message{
 		username: "",
 		time:     "",
-		text:     model.renderer.NewStyle().Foreground(lipgloss.Color("#3C3C3C")).Render(fmt.Sprintf("%s has entered the chat.", model.username)),
+		text:     renderer.NewStyle().Foreground(lipgloss.Color("#3C3C3C")).Render(fmt.Sprintf("%s has entered the chat.", model.username)),
 	}
 
 	a.messagesDeque.PushBack(message)
@@ -178,6 +184,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 
+				m.messageInput.Reset()
+				m.messageInput.Blur()
+				m.messageInput.Placeholder = "press spacebar to type"
+
 				m.app.messagesDeque.PushBack(message)
 
 				m.updateClients(NewMessageMsg{})
@@ -240,6 +250,7 @@ func main() {
 	// a.clearPassword = "90239a30e767caddf585ece44f0d572d659631b9fce0de13c713f101f6103863"
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
+		// wish.WithHostKeyPath(fmt.Sprint(home, "/.ssh/chat-app")),
 		wish.WithHostKeyPath(fmt.Sprint(home, "/.ssh/chat-app")),
 		// wish.WithPublicKeyAuth(publicKeyAuthHandler),
 		wish.WithMiddleware(
@@ -276,8 +287,7 @@ func (m *model) updateClients(msg NewMessageMsg) {
 		if id != m.id {
 			client.Send(NewMessageMsg{})
 		}
-		m.messageInput.Reset()
-		m.messageInput.Blur()
+
 	}
 }
 
