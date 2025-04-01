@@ -265,7 +265,7 @@ func main() {
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
 		// wish.WithHostKeyPath(fmt.Sprint(home, "/.ssh/chat-app")),
-		wish.WithHostKeyPath(fmt.Sprint(home, "/.ssh/chat-app/chat-app")),
+		wish.WithHostKeyPath(fmt.Sprint(home, "/.ssh/chat-app")),
 		// wish.WithPublicKeyAuth(publicKeyAuthHandler),
 		wish.WithMiddleware(
 			bubbletea.MiddlewareWithProgramHandler(a.ProgramHandler, termenv.ANSI256),
