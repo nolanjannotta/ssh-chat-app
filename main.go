@@ -73,12 +73,11 @@ func (a *app) ProgramHandler(s ssh.Session) *tea.Program {
 	messageInput := textinput.New()
 	messageInput.Placeholder = "press spacebar to type"
 	messageInput.Width = pty.Window.Width
-	// messageInput.TextStyle.Renderer(renderer)
-	// messageInput.Cursor.Style.Renderer(renderer)
+
 	messageInput.PlaceholderStyle = renderer.NewStyle().Foreground(lipgloss.Color("#3C3C3C"))
-	// messageInput.Cursor.TextStyle.Renderer(renderer)
-	messageInput.Cursor.SetChar("D")
-	messageInput.Cursor.Style.Renderer(renderer).Foreground(lipgloss.Color("0xfffff"))
+	// messageInput.Cursor.TextStyle.Renderer(renderer).Background(lipgloss.Color("0xfffff"))
+	// messageInput.Cursor.SetChar("D")
+	messageInput.Cursor.Style = renderer.NewStyle().Background(lipgloss.AdaptiveColor{Light: "255", Dark: "0"})
 
 	model := model{
 		term:         pty.Term,
@@ -89,11 +88,14 @@ func (a *app) ProgramHandler(s ssh.Session) *tea.Program {
 		id:           uuid.New(),
 		username:     s.User() + fmt.Sprintf("_%x", hash[0:2]),
 		renderer:     renderer,
+		app:          a,
 	}
-
 	model.viewport = viewport.New(model.width, model.height-1)
 	// model.viewport.YPosition = 0
 	model.viewport.MouseWheelEnabled = true
+
+	// model.viewport.SetContent(model.stringifyMessages())
+	// model.viewport.GotoBottom()
 
 	message := Message{
 		username: "",
@@ -103,7 +105,9 @@ func (a *app) ProgramHandler(s ssh.Session) *tea.Program {
 
 	a.messagesDeque.PushBack(message)
 
-	model.app = a
+	model.viewport.SetContent(model.stringifyMessages())
+	model.viewport.GotoBottom()
+
 	p := tea.NewProgram(model, tea.WithInput(s), tea.WithOutput(s), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	a.idToClient[model.id] = p
 	model.updateClients(NewMessageMsg{})
@@ -147,8 +151,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				time:     "",
 				text:     m.renderer.NewStyle().Foreground(lipgloss.Color("#3C3C3C")).Render(fmt.Sprintf("%s has left the chat.", m.username)),
 			}
-
+			delete(m.app.idToClient, m.id)
+			// client := m.app.idToClient[m.id]
 			m.app.messagesDeque.PushBack(quit)
+			m.updateClients(NewMessageMsg{})
+			m.viewport.SetContent(m.stringifyMessages())
+			m.viewport.GotoBottom()
 			return m, tea.Quit
 		case " ":
 			if !m.messageInput.Focused() {
@@ -190,6 +198,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				m.app.messagesDeque.PushBack(message)
 
+				m.viewport.SetContent(m.stringifyMessages())
+				m.viewport.GotoBottom()
+
 				m.updateClients(NewMessageMsg{})
 
 			}
@@ -217,14 +228,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() string {
 	// s := fmt.Sprintf("Your term is %s\nYour window size is %dx%d\nBackground: %s\nColor Profile: %s", m.term, m.width, m.height, m.bg, m.profile)
 	// return m.txtStyle.Render(s) + "\n\n" + m.quitStyle.Render("Press 'q' to quit\n")
-	var messages string
-	// fmt.Println(m.app.messagesDeque.Len())
-	for i := range m.app.messagesDeque.Len() {
-		message := m.app.messagesDeque.At(i)
-		messages += "\n" + message.username + message.time + message.text + "\n"
+	// var messages string
+	// // fmt.Println(m.app.messagesDeque.Len())
+	// for i := range m.app.messagesDeque.Len() {
+	// 	message := m.app.messagesDeque.At(i)
+	// 	messages += "\n" + message.username + message.time + message.text + "\n"
 
-	}
-	m.viewport.SetContent(messages)
+	// }
+	// m.viewport.SetContent(messages)
 	// fmt.Println(messages)
 	// if m.app.messagesDeque.Len() > 0 {
 
@@ -232,7 +243,10 @@ func (m model) View() string {
 
 	// }
 	// input := lipgloss.PlaceVertical(m.height-m.app.messagesDeque.Len()*2, lipgloss.Bottom, m.messageInput.View())
-	m.viewport.GotoBottom()
+	// m.viewport.GotoBottom()
+	// m.viewport.SetContent(m.stringifyMessages())
+	// m.viewport.GotoBottom()
+
 	return lipgloss.JoinVertical(lipgloss.Bottom, m.viewport.View(), m.messageInput.View())
 
 	// return m.viewport.View() + m.messageInput.View()
@@ -251,7 +265,7 @@ func main() {
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
 		// wish.WithHostKeyPath(fmt.Sprint(home, "/.ssh/chat-app")),
-		wish.WithHostKeyPath(fmt.Sprint(home, "/.ssh/chat-app")),
+		wish.WithHostKeyPath(fmt.Sprint(home, "/.ssh/chat-app/chat-app")),
 		// wish.WithPublicKeyAuth(publicKeyAuthHandler),
 		wish.WithMiddleware(
 			bubbletea.MiddlewareWithProgramHandler(a.ProgramHandler, termenv.ANSI256),
@@ -294,4 +308,15 @@ func (m *model) updateClients(msg NewMessageMsg) {
 func publicKeyAuthHandler(ctx ssh.Context, key ssh.PublicKey) bool {
 	fmt.Println(key)
 	return true
+}
+
+func (m *model) stringifyMessages() string {
+	var messages string
+	// fmt.Println(m.app.messagesDeque.Len())
+	for i := range m.app.messagesDeque.Len() {
+		message := m.app.messagesDeque.At(i)
+		messages += "\n" + message.username + message.time + message.text + "\n"
+
+	}
+	return messages
 }

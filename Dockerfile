@@ -16,7 +16,6 @@ RUN GOOS=linux go build -o . .
 
 FROM gcr.io/distroless/base-debian12
 
-
 WORKDIR /app
 COPY --from=builder /build/chat-app .
 # COPY --from=builder /.ssh/chat-app /.ssh/chat-app
