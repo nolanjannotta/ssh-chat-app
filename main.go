@@ -48,6 +48,8 @@ type NewMessageMsg struct {
 	// text string
 }
 
+const greyColor = lipgloss.Color("#3C3C3C")
+
 type model struct {
 	width, height int
 	messageInput  textinput.Model
@@ -73,12 +75,10 @@ func (a *app) ProgramHandler(s ssh.Session) *tea.Program {
 	renderer := bubbletea.MakeRenderer(s)
 	messageInput := textinput.New()
 	viewport := viewport.New(pty.Window.Width, pty.Window.Height-1)
-
-	// textinput.NewModel
 	messageInput.Placeholder = "press spacebar to type"
-	messageInput.Width = pty.Window.Width
+	messageInput.Width = pty.Window.Width - 17
 
-	messageInput.PlaceholderStyle = renderer.NewStyle().Foreground(lipgloss.Color("#3C3C3C"))
+	messageInput.PlaceholderStyle = renderer.NewStyle().Foreground(greyColor)
 	messageInput.Cursor.Style = renderer.NewStyle().Background(lipgloss.AdaptiveColor{Light: "255", Dark: "0"})
 
 	model.width = pty.Window.Width
@@ -91,9 +91,8 @@ func (a *app) ProgramHandler(s ssh.Session) *tea.Program {
 	model.viewport = viewport
 	model.color = fmt.Sprintf("%x", colorHash[0:3])
 
-	fmt.Println(model.color)
 	message := Message{}
-	message.text = renderer.NewStyle().Foreground(lipgloss.Color("#3C3C3C")).Render(fmt.Sprintf("%s has entered the chat.", model.username))
+	message.text = renderer.NewStyle().Foreground(greyColor).Render(fmt.Sprintf("%s has entered the chat.", model.username))
 
 	a.messagesDeque.PushBack(message)
 
@@ -120,13 +119,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.height = msg.Height
 		m.width = msg.Width
+		m.messageInput.Width = msg.Width - 17
+		m.viewport.Height = msg.Height - 1
+		m.viewport.Width = msg.Width
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
 			quit := Message{
 				username: "",
 				time:     "",
-				text:     m.renderer.NewStyle().Foreground(lipgloss.Color("#3C3C3C")).Render(fmt.Sprintf("%s has left the chat.", m.username)),
+				text:     m.renderer.NewStyle().Foreground(greyColor).Render(fmt.Sprintf("%s has left the chat.", m.username)),
 			}
 			delete(m.app.idToClient, m.id)
 			// client := m.app.idToClient[m.id]
@@ -155,7 +157,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					message = Message{
 						username: "",
 						time:     "",
-						text:     m.renderer.NewStyle().Foreground(lipgloss.Color("#3C3C3C")).Render("chat cleared"),
+						text:     m.renderer.NewStyle().Foreground(greyColor).Render("chat cleared"),
 					}
 				} else {
 					message = Message{
@@ -163,7 +165,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						time:     "@" + time.Now().UTC().Format("15:04:05") + " UTC",
 						text:     "\n  ↳" + m.messageInput.Value(),
 					}
-					fmt.Println("#" + m.color)
 				}
 
 				m.messageInput.Reset()
@@ -191,7 +192,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	return m.viewport.View() + "\n" + m.messageInput.View()
+	return m.viewport.View() + "\n" + m.messageInput.View() + m.renderer.NewStyle().Foreground(greyColor).Render("ctrl c to exit")
 }
 
 func main() {
