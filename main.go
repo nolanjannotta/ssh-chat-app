@@ -40,68 +40,60 @@ type Message struct {
 }
 
 type app struct {
-	idToClient map[uuid.UUID]*tea.Program
-	// messages      string
+	idToClient    map[uuid.UUID]*tea.Program
 	messagesDeque *deque.Deque[Message]
-	// clearPassword string
-	// messages   [20]Message
 }
 
 type NewMessageMsg struct {
 	// text string
 }
 
+type model struct {
+	width, height int
+	messageInput  textinput.Model
+	id            uuid.UUID
+	app           *app
+	username      string
+	viewport      viewport.Model
+	renderer      *lipgloss.Renderer
+	color         string
+}
+
 func (a *app) ProgramHandler(s ssh.Session) *tea.Program {
+	model := model{}
 
-	// model := initialModel(a.chains)
-	// This should never fail, as we are using the activeterm middleware.
+	ipBytes := []byte(strings.Split(s.RemoteAddr().String(), ":")[0])
+	ipHash := sha256.Sum256(ipBytes)
 
-	data := []byte(strings.Split(s.RemoteAddr().String(), ":")[0])
-	hash := sha256.Sum256(data)
-	// id := fmt.Sprintf("%x", hash[0:5])
-	// fmt.Println(id)
-	// fmt.Printf("SHA-256 hash: %x\n", hash)
-
-	// password := []byte("clear_all")
-	// passwordHash := sha256.Sum256(password)
-	// fmt.Println(fmt.Sprintf("%x", passwordHash))
+	colorBytes := []byte(s.User() + strings.Split(s.RemoteAddr().String(), ":")[0])
+	colorHash := sha256.Sum256(colorBytes)
 
 	pty, _, _ := s.Pty()
 
 	renderer := bubbletea.MakeRenderer(s)
-	fmt.Println(renderer.ColorProfile().Name())
 	messageInput := textinput.New()
+	viewport := viewport.New(pty.Window.Width, pty.Window.Height-1)
+
+	// textinput.NewModel
 	messageInput.Placeholder = "press spacebar to type"
 	messageInput.Width = pty.Window.Width
 
 	messageInput.PlaceholderStyle = renderer.NewStyle().Foreground(lipgloss.Color("#3C3C3C"))
-	// messageInput.Cursor.TextStyle.Renderer(renderer).Background(lipgloss.Color("0xfffff"))
-	// messageInput.Cursor.SetChar("D")
 	messageInput.Cursor.Style = renderer.NewStyle().Background(lipgloss.AdaptiveColor{Light: "255", Dark: "0"})
 
-	model := model{
-		term:         pty.Term,
-		profile:      renderer.ColorProfile().Name(),
-		width:        pty.Window.Width,
-		height:       pty.Window.Height,
-		messageInput: messageInput,
-		id:           uuid.New(),
-		username:     s.User() + fmt.Sprintf("_%x", hash[0:2]),
-		renderer:     renderer,
-		app:          a,
-	}
-	model.viewport = viewport.New(model.width, model.height-1)
-	// model.viewport.YPosition = 0
-	model.viewport.MouseWheelEnabled = true
+	model.width = pty.Window.Width
+	model.height = pty.Window.Height
+	model.messageInput = messageInput
+	model.id = uuid.New()
+	model.username = s.User() + fmt.Sprintf("_%x", ipHash[0:2])
+	model.renderer = renderer
+	model.app = a
+	model.viewport = viewport
+	model.color = fmt.Sprintf("%x", colorHash[0:3])
 
-	// model.viewport.SetContent(model.stringifyMessages())
-	// model.viewport.GotoBottom()
-
-	message := Message{
-		username: "",
-		time:     "",
-		text:     renderer.NewStyle().Foreground(lipgloss.Color("#3C3C3C")).Render(fmt.Sprintf("%s has entered the chat.", model.username)),
-	}
+	fmt.Println(model.color)
+	message := Message{}
+	message.text = renderer.NewStyle().Foreground(lipgloss.Color("#3C3C3C")).Render(fmt.Sprintf("%s has entered the chat.", model.username))
 
 	a.messagesDeque.PushBack(message)
 
@@ -114,26 +106,11 @@ func (a *app) ProgramHandler(s ssh.Session) *tea.Program {
 	return p
 }
 
-// Just a generic tea.Model to demo terminal information of ssh.
-type model struct {
-	term         string
-	profile      string
-	width        int
-	height       int
-	messageInput textinput.Model
-	id           uuid.UUID
-	app          *app
-	username     string
-	viewport     viewport.Model
-	renderer     *lipgloss.Renderer
-}
-
 func (m model) Init() tea.Cmd {
 	return nil
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// var cmd tea.Cmd
 	var cmd1, cmd2 tea.Cmd
 	var cmds []tea.Cmd
 	m.messageInput, cmd1 = m.messageInput.Update(msg)
@@ -163,19 +140,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				focusCmd := m.messageInput.Focus()
 				cmds = append(cmds, focusCmd)
 				m.messageInput.Placeholder = "press enter to send"
-				// m.messageInput.
-				// m.messageInput.SetValue("")
+
 			}
 
-		// case "420":
-		// 	m.app.messagesDeque.Clear()
 		case "enter":
 			if m.messageInput.Focused() {
 				if m.app.messagesDeque.Len() >= 20 {
 					m.app.messagesDeque.PopFront()
 				}
-
-				// fmt.Println(m.messageInput.Value())
+				m.renderer.ColorProfile()
 				var message Message
 				if m.messageInput.Value() == "clear_all69" {
 					m.app.messagesDeque.Clear()
@@ -186,10 +159,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				} else {
 					message = Message{
-						username: m.username,
-						time:     "@" + time.Now().Format("15:04:05"),
+						username: m.renderer.NewStyle().Foreground(lipgloss.Color("#" + m.color)).Render(m.username),
+						time:     "@" + time.Now().UTC().Format("15:04:05") + " UTC",
 						text:     "\n  ↳" + m.messageInput.Value(),
 					}
+					fmt.Println("#" + m.color)
 				}
 
 				m.messageInput.Reset()
@@ -208,48 +182,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case NewMessageMsg:
+		m.viewport.SetContent(m.stringifyMessages())
+		m.viewport.GotoBottom()
 
 	}
-	var messages string
-	// fmt.Println(m.app.messagesDeque.Len())
-	for i := range m.app.messagesDeque.Len() {
-		message := m.app.messagesDeque.At(i)
-		messages += "\n" + message.username + message.time + message.text
-
-	}
-
-	// m.messageInput, cmd1 = m.messageInput.Update(msg)
-
-	// fmt.Println(cmd1, cmd2)
 
 	return m, tea.Batch(cmds...)
 }
 
 func (m model) View() string {
-	// s := fmt.Sprintf("Your term is %s\nYour window size is %dx%d\nBackground: %s\nColor Profile: %s", m.term, m.width, m.height, m.bg, m.profile)
-	// return m.txtStyle.Render(s) + "\n\n" + m.quitStyle.Render("Press 'q' to quit\n")
-	// var messages string
-	// // fmt.Println(m.app.messagesDeque.Len())
-	// for i := range m.app.messagesDeque.Len() {
-	// 	message := m.app.messagesDeque.At(i)
-	// 	messages += "\n" + message.username + message.time + message.text + "\n"
-
-	// }
-	// m.viewport.SetContent(messages)
-	// fmt.Println(messages)
-	// if m.app.messagesDeque.Len() > 0 {
-
-	// 	messages = m.app.messagesDeque.Front()
-
-	// }
-	// input := lipgloss.PlaceVertical(m.height-m.app.messagesDeque.Len()*2, lipgloss.Bottom, m.messageInput.View())
-	// m.viewport.GotoBottom()
-	// m.viewport.SetContent(m.stringifyMessages())
-	// m.viewport.GotoBottom()
-
-	return lipgloss.JoinVertical(lipgloss.Bottom, m.viewport.View(), m.messageInput.View())
-
-	// return m.viewport.View() + m.messageInput.View()
+	return m.viewport.View() + "\n" + m.messageInput.View()
 }
 
 func main() {
@@ -261,15 +203,12 @@ func main() {
 	a := new(app)
 	a.idToClient = make(map[uuid.UUID]*tea.Program)
 	a.messagesDeque = new(deque.Deque[Message])
-	// a.clearPassword = "90239a30e767caddf585ece44f0d572d659631b9fce0de13c713f101f6103863"
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
-		// wish.WithHostKeyPath(fmt.Sprint(home, "/.ssh/chat-app")),
 		wish.WithHostKeyPath(fmt.Sprint(home, "/.ssh/chat-app")),
-		// wish.WithPublicKeyAuth(publicKeyAuthHandler),
 		wish.WithMiddleware(
-			bubbletea.MiddlewareWithProgramHandler(a.ProgramHandler, termenv.ANSI256),
-			activeterm.Middleware(), // Bubble Tea apps usually require a PTY.
+			bubbletea.MiddlewareWithProgramHandler(a.ProgramHandler, termenv.TrueColor),
+			activeterm.Middleware(),
 			logging.Middleware(),
 		),
 	)
@@ -305,14 +244,8 @@ func (m *model) updateClients(msg NewMessageMsg) {
 	}
 }
 
-func publicKeyAuthHandler(ctx ssh.Context, key ssh.PublicKey) bool {
-	fmt.Println(key)
-	return true
-}
-
 func (m *model) stringifyMessages() string {
 	var messages string
-	// fmt.Println(m.app.messagesDeque.Len())
 	for i := range m.app.messagesDeque.Len() {
 		message := m.app.messagesDeque.At(i)
 		messages += "\n" + message.username + message.time + message.text + "\n"
